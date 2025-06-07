@@ -1,11 +1,12 @@
 FROM snowplow/snowplow-enrich-pubsub:5.3.0
 
-# Copia configs y enrichments
+# Copia configs y enrichments (incluso si el directorio está vacío)
 COPY config/config.hocon   /config/config.hocon
 COPY config/resolver.json  /config/resolver.json
 COPY enrichments/          /enrichments/
 
-# Copia wrapper.sh — el bit +x ya viene del host
-COPY wrapper.sh           /usr/local/bin/wrapper.sh
+# Copia el wrapper y marca ejecutable
+COPY wrapper.sh            /usr/local/bin/wrapper.sh
+RUN chmod +x /usr/local/bin/wrapper.sh
 
 ENTRYPOINT ["/usr/local/bin/wrapper.sh"]

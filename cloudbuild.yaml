@@ -1,35 +1,43 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    id: Build enrich image
-    args: ['build', '-f', 'Dockerfile.enrich', '-t', 'gcr.io/$PROJECT_ID/enrich-job', '.']
-
-  - name: 'gcr.io/cloud-builders/docker'
-    id: Push to Container Registry
-    args: ['push', 'gcr.io/$PROJECT_ID/enrich-job']
-
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: Deploy Cloud Run Job
-    entrypoint: bash
+  - name: ubuntu
     args:
       - '-c'
       - |
-        gcloud run jobs create enrich-job \
-          --image gcr.io/$PROJECT_ID/enrich-job \
-          --region us-central1 \
-          --max-retries 5 \
-          --memory 2Gi \
-          --cpu 2 \
-          --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
-          --command '/bin/sh' \
-          --args='-c','/snowplow-enrich-pubsub --enrichments /enrichments --iglu-config /config/resolver.json --config /config/config.hocon' || \
-        gcloud run jobs update enrich-job \
-          --image gcr.io/$PROJECT_ID/enrich-job \
-          --region us-central1 \
-          --max-retries 5 \
-          --memory 2Gi \
-          --cpu 2 \
-          --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
-          --command '/bin/sh' \
-          --args='-c','/snowplow-enrich-pubsub --enrichments /enrichments --iglu-config /config/resolver.json --config /config/config.hocon'
-
-timeout: 900s
+        mkdir -p enrichments
+        touch enrichments/.keep
+    entrypoint: bash
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--no-cache'
+      - '-t'
+      - >-
+        ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+      - .
+      - '-f'
+      - Dockerfile.enrich
+    id: Build
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - >-
+        ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+    id: Push
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    args:
+      - '-c'
+      - "gcloud run jobs describe $_SERVICE_NAME --region=$_DEPLOY_REGION >/dev/null 2>&1 \\\n&& echo \"\U0001F504 Updating existing job...\" \\\n&& gcloud run jobs update $_SERVICE_NAME \\\n  --image ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA} \\\n  --region $_DEPLOY_REGION \\\n  --memory 2Gi \\\n  --cpu 2 \\\n  --max-retries 5 \\\n  --set-env-vars \"GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json\" \\\n  --args=--enrichments=/enrichments,--iglu-config=/config/resolver.json,--config=/config/config.hocon \\\n|| gcloud run jobs create $_SERVICE_NAME \\\n  --image ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA} \\\n  --region $_DEPLOY_REGION \\\n  --memory 2Gi \\\n  --cpu 2 \\\n  --max-retries 5 \\\n  --set-env-vars \"GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json\" \\\n  --args=--enrichments=/enrichments,--iglu-config=/config/resolver.json,--config=/config/config.hocon\n"
+    id: Deploy Job
+    entrypoint: bash
+images:
+  - >-
+    ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}
+options:
+  substitutionOption: ALLOW_LOOSE
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _AR_PROJECT_ID: baico-platform-dev
+  _SERVICE_NAME: enrich-job
+  _DEPLOY_REGION: us-central1
+  _AR_HOSTNAME: us-central1-docker.pkg.dev
+  _AR_REPOSITORY: enrich

@@ -1,9 +1,5 @@
 FROM snowplow/snowplow-enrich-pubsub:5.3.0
 
-# Crea las carpetas necesarias dentro de la imagen
-RUN mkdir -p  /enrichments
-
-
 # Copia los archivos si existen
 COPY config/config.hocon /config/config.hocon
 COPY config/resolver.json /config/resolver.json

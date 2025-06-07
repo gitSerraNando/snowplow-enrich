@@ -6,5 +6,4 @@ COPY config/resolver.json /config/resolver.json
 
 # Copia la carpeta vacía (evita error si local/enrichments está vacía)
 COPY enrichments /enrichments/
-COPY key.json /secrets/key.json
 

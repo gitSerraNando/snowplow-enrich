@@ -25,3 +25,22 @@
   --config /config/config.hocon
 
 
+
+  [Browser / GTM]
+        |
+   Snowplow JS Tracker
+        |
+        ▼
+    Pub/Sub Topic: "collector-good"
+        |
+        ▼
+  Cloud Run Service: "enrich"
+        |
+        ▼
+    Pub/Sub Topic: "enriched-good"
+        |
+        ▼
+ Cloud Function (loader trigger)
+        |
+        ▼
+Cloud Run Job o Service: "bigquery-loader"

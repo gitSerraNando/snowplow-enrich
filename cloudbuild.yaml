@@ -1,10 +1,14 @@
 steps:
+  # Paso 0: Asegura que la carpeta enrichments exista
   - name: ubuntu
+    entrypoint: bash
     args:
-      - '-c'
+      - -c
       - |
         mkdir -p enrichments
         touch enrichments/.keep
+
+  # Paso 1: Build de Dockerfile.enrich
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -16,12 +20,16 @@ steps:
       - Dockerfile.enrich
     id: Build-Enrich
 
+  # Paso 2: Push al Artifact Registry
   - name: gcr.io/cloud-builders/docker
     args:
       - push
       - '${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}'
     id: Push-Enrich
 
+  # Paso 3: Deploy como Cloud Run Service
+# Versión corregida del Paso 3:
+# Paso 3: Deploy como Cloud Run Service
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     entrypoint: bash
     args:
@@ -35,9 +43,9 @@ steps:
             --memory=2Gi \
             --cpu=2 \
             --max-instances=5 \
-            --min-instances=0 \
-            --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
-            --update-secrets="/secrets/key.json=key-json-secret:latest" \
+            --min-instances=1 \
+            --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
+            --update-secrets /secrets/key.json=key-json-secret:latest \
             --args="--enrichments=/enrichments,--iglu-config=/config/resolver.json,--config=/config/config.hocon" \
             --no-allow-unauthenticated
         else
@@ -48,11 +56,13 @@ steps:
             --memory=2Gi \
             --cpu=2 \
             --max-instances=5 \
-            --min-instances=0 \
-            --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
-            --set-secrets="/secrets/key.json=key-json-secret:latest" \
+            --min-instances=1 \
+            --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
+            --set-secrets /secrets/key.json=key-json-secret:latest \
             --args="--enrichments=/enrichments,--iglu-config=/config/resolver.json,--config=/config/config.hocon" \
             --no-allow-unauthenticated
+        fi
+
 
 images:
   - ${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${COMMIT_SHA}

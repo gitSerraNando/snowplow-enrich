@@ -1,0 +1,172 @@
+license {
+  accept = true
+}
+
+input {
+  type = "PubSub"
+  subscription = "projects/baico-platform-dev/subscriptions/good-sub"
+  parallelPullCount =3
+  maxQueueSize = 3000
+  maxRequestBytes = 50000000
+  maxAckExtensionPeriod = "5m"
+}
+
+maxJsonDepth = 50
+
+atomicFieldsLimits {
+  app_id      = 5
+  mkt_clickid = 100000
+}
+
+enrich {
+  enrichments = [
+    # 1. User Agent Parser
+    {
+      schema = "iglu:com.snowplowanalytics.snowplow/ua_parser_config/jsonschema/1-0-0"
+      data = {
+        name = "ua_parser", enabled = true,
+        vendor = "com.snowplowanalytics.snowplow"
+      }
+    },
+    # 2. Geolocalización IP (CONFIG COMPLETA)
+    {
+      schema = "iglu:com.snowplowanalytics.snowplow/ip_lookups_enrichment/jsonschema/2-0-0"
+      data = {
+        name = "ip_lookup", enabled = true,
+        vendor = "com.snowplowanalytics.snowplow",
+        parameters = {
+          database = "GeoLite2-City"
+          uri = "gs://baico-platform-dev-config/GeoLite2-City.mmdb"
+          provider = "maxmind"
+          cacheSize = 4096
+          geoip2Fields = {
+            city = true
+            country = true
+            location = true
+            postal = false
+            isp = false
+          }
+        }
+      }
+    },
+    # 3. Referer Parser (AÑADIDO)
+    {
+      schema = "iglu:com.snowplowanalytics.snowplow/referer_parser_enrichment/jsonschema/1-0-0"
+      data = {
+        name = "referer_parser", enabled = true,
+        vendor = "com.snowplowanalytics.snowplow",
+        parameters = {
+          internalDomains = ["baico.co", "bancopopular.com.co"]
+        }
+      }
+    },
+    # 4. ATRIBUCIÓN DE CAMPAÑAS (UTM)
+    {
+      schema = "iglu:com.snowplowanalytics.snowplow/campaign_attribution_enrichment/jsonschema/1-0-0"
+      data = {
+        name    = "campaign_attribution"
+        enabled = true
+        vendor  = "com.snowplowanalytics.snowplow"
+        parameters = {
+          mediumParameters = ["utm_medium", "medium"]
+          sourceParameters = ["utm_source", "source"]
+          termParameters    = ["utm_term", "term"]
+          contentParameters = ["utm_content", "content"]
+          campaignParameters = ["utm_campaign", "campaign"]
+          clickIdParameters = ["gclid", "dclid", "msclkid"]
+        }
+      }
+    },
+
+    # 5. ENRIQUECIMIENTO DE PÁGINA (OPCIONAL)
+    {
+      schema = "iglu:com.snowplowanalytics.snowplow/page_enrichment_config/jsonschema/1-0-0"
+      data = {
+        name    = "page_enrichment"
+        enabled = true
+        vendor  = "com.snowplowanalytics.snowplow"
+        parameters = {
+          page = "page"
+          referer = "refr"
+        }
+      }
+    }
+  ]
+}
+  monitoring {
+    logging {
+      level = "debug"
+      # Agrega estas líneas para más detalle
+      format = "json"  # Formato estructurado
+      appName = "snowplow-enrich"
+    }
+  }
+  streams {
+    in {
+      raw = "projects/baico-platform-dev/subscriptions/good-sub"
+    }
+    out {
+      enriched = "projects/baico-platform-dev/topics/enriched-good"
+      bad = "projects/baico-platform-dev/topics/bad"
+      partitionKey = "domain_sessionid"
+      #partitionKey = "domain_userid"
+    }
+    sourceSink {
+      enabled = "pubsub"
+    }
+    buffer {
+      byteLimit   = 5242880
+      recordLimit = 500
+      timeLimit   = "200ms"
+    }
+    backoffPolicy {
+      minBackoff = "100ms"
+      maxBackoff = "5s"
+    }
+    appName = "baico-stream-enrich"
+  }
+ monitoring {
+    logging {
+      level = "debug"
+      format = "json"
+      appName = "snowplow-enrich"
+    }
+    snowplow {
+      collectorUri = "https://baico-collector-281308224593.us-central1.run.app"
+      collectorPort = 8080
+      appId = "baico-stream-enrich"
+      method = "GET"
+    }
+  }
+  sentry {
+    dsn = ${?SENTRY_DSN}
+  }
+
+
+output {
+  good {
+    topic = "projects/baico-platform-dev/topics/enriched-good"
+    format = "json"
+    delayThreshold  = "200ms"
+    maxBatchSize    = 1000
+    maxBatchBytes   = 5242880
+  }
+  incomplete {
+    topic = "projects/baico-platform-dev/topics/incomplete"
+    delayThreshold  = "200ms"
+    maxBatchSize    = 1000
+    maxBatchBytes   = 5242880
+  }
+  bad {
+    topic = "projects/baico-platform-dev/topics/bad"
+    delayThreshold  = "200ms"
+    maxBatchSize    = 1000
+    maxBatchBytes   = 5242880
+  }
+}
+
+iglu {
+  resolver {
+    json = "/config/resolver.json"
+  }
+}

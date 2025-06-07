@@ -1,0 +1,35 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build enrich image
+    args: ['build', '-f', 'Dockerfile.enrich', '-t', 'gcr.io/$PROJECT_ID/enrich-job', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push to Container Registry
+    args: ['push', 'gcr.io/$PROJECT_ID/enrich-job']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: Deploy Cloud Run Job
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud run jobs create enrich-job \
+          --image gcr.io/$PROJECT_ID/enrich-job \
+          --region us-central1 \
+          --max-retries 5 \
+          --memory 2Gi \
+          --cpu 2 \
+          --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
+          --command '/bin/sh' \
+          --args='-c','/snowplow-enrich-pubsub --enrichments /enrichments --iglu-config /config/resolver.json --config /config/config.hocon' || \
+        gcloud run jobs update enrich-job \
+          --image gcr.io/$PROJECT_ID/enrich-job \
+          --region us-central1 \
+          --max-retries 5 \
+          --memory 2Gi \
+          --cpu 2 \
+          --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json \
+          --command '/bin/sh' \
+          --args='-c','/snowplow-enrich-pubsub --enrichments /enrichments --iglu-config /config/resolver.json --config /config/config.hocon'
+
+timeout: 900s

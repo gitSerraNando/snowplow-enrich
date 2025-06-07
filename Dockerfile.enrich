@@ -1,0 +1,5 @@
+FROM snowplow/snowplow-enrich-pubsub:5.3.0
+
+COPY config/config.hocon /config/config.hocon
+COPY config/resolver.json /config/resolver.json
+COPY enrichments /enrichments

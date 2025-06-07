@@ -1,12 +1,14 @@
+# syntax=docker/dockerfile:1
 FROM snowplow/snowplow-enrich-pubsub:5.3.0
 
-# Copia los archivos si existen
-COPY config/config.hocon /config/config.hocon
-COPY config/resolver.json /config/resolver.json
+# Copia archivos de configuración
+COPY config/config.hocon   /config/config.hocon
+COPY config/resolver.json   /config/resolver.json
 
-# Copia la carpeta vacía (evita error si local/enrichments está vacía)
-COPY enrichments /enrichments/
+# Copia la carpeta de enriquecimientos (incluso si está vacía)
+COPY enrichments           /enrichments/
 
+# Copia el wrapper y fija permisos
 COPY --chmod=0755 wrapper.sh /usr/local/bin/wrapper.sh
 
 ENTRYPOINT ["/usr/local/bin/wrapper.sh"]
